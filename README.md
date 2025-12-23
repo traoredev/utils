@@ -100,6 +100,19 @@ docker exec dev_minio mc mb local/my-bucket
 | RedisInsight  | http://localhost:5540 |
 | MinIO Console | http://localhost:9001 |
 
+### Connecting pgAdmin to PostgreSQL
+
+Since pgAdmin runs inside Docker, use the **internal** Docker hostname and port:
+
+| Field             | Value      |
+| ----------------- | ---------- |
+| Host name/address | `postgres` |
+| Port              | `5432`     |
+| Username          | `postgres` |
+| Password          | `postgres` |
+
+> **Note:** Use `postgres:5432` (Docker network), not `localhost:5433` (host mapping).
+
 ## Data Persistence
 
 Data is persisted in `./data/` directory:
