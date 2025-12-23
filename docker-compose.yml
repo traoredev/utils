@@ -18,7 +18,6 @@ services:
     build:
       context: ./docker
       dockerfile: Dockerfile.postgres
-    image: dev_postgres:18
     container_name: dev_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -27,7 +26,8 @@ services:
     ports:
       - '${POSTGRES_PORT:-5433}:5432'
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      # PG18+ requires mount at /var/lib/postgresql (not /data subdirectory)
+      - ./data/postgres:/var/lib/postgresql
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     restart: unless-stopped
     healthcheck:
@@ -59,14 +59,15 @@ services:
       - dev-network
 
   # ---------------------------------------------------------------------------
-  # MailHog - Email Testing (SMTP: 1025, Web UI: 8025)
+  # Mailpit - Email Testing (SMTP: 1025, Web UI: 8025)
+  # Replaces MailHog with native ARM64 support
   # ---------------------------------------------------------------------------
-  mailhog:
-    image: mailhog/mailhog:latest
-    container_name: dev_mailhog
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: dev_mailpit
     ports:
-      - '${MAILHOG_SMTP_PORT:-1025}:1025'
-      - '${MAILHOG_UI_PORT:-8025}:8025'
+      - '${MAIL_SMTP_PORT:-1025}:1025'
+      - '${MAIL_UI_PORT:-8025}:8025'
     restart: unless-stopped
     networks:
       - dev-network

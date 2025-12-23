@@ -8,7 +8,7 @@ A unified Docker Compose setup for local development with Elixir and Node.js pro
 | ----------------- | ----------------------- | --------------------------------------- |
 | **PostgreSQL 18** | 5433                    | Custom build with pgvector (extensible) |
 | **Redis 7**       | 6379                    | Cache, sessions, job queues             |
-| **MailHog**       | 8025 (UI) / 1025 (SMTP) | Email testing                           |
+| **Mailpit**       | 8025 (UI) / 1025 (SMTP) | Email testing                           |
 | **pgAdmin**       | 5050                    | PostgreSQL management (profile: admin)  |
 | **RedisInsight**  | 5540                    | Redis management (profile: admin)       |
 | **MinIO**         | 9001 (UI) / 9000 (API)  | S3-compatible storage (profile: s3)     |
@@ -95,7 +95,7 @@ docker exec dev_minio mc mb local/my-bucket
 
 | Service       | URL                   |
 | ------------- | --------------------- |
-| MailHog       | http://localhost:8025 |
+| Mailpit       | http://localhost:8025 |
 | pgAdmin       | http://localhost:5050 |
 | RedisInsight  | http://localhost:5540 |
 | MinIO Console | http://localhost:9001 |
