@@ -1,0 +1,60 @@
+# =============================================================================
+# Custom PostgreSQL 18 with Extensions
+# =============================================================================
+# Rebuild after adding extensions:
+#   docker compose build postgres
+#   docker compose up -d postgres
+# =============================================================================
+
+FROM postgres:18
+
+LABEL maintainer="dev"
+LABEL description="PostgreSQL 18 with pgvector and custom extensions"
+
+# =============================================================================
+# Install extensions in a single layer for efficient cleanup
+# =============================================================================
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+        ca-certificates \
+        postgresql-server-dev-18 \
+    # -------------------------------------------------------------------------
+    # pgvector v0.8.1 - Vector similarity search
+    # https://github.com/pgvector/pgvector/tags
+    # Note: v0.8.1 is the extension version, works with PostgreSQL 13-18
+    # -------------------------------------------------------------------------
+    && cd /tmp \
+    && git clone --depth 1 --branch v0.8.1 https://github.com/pgvector/pgvector.git \
+    && cd pgvector \
+    && make \
+    && make install \
+
+    # =============================================================================
+    # Add more extensions here as needed
+    # =============================================================================
+
+    # Example: pg_cron - Job scheduler
+    # RUN cd /tmp \
+    #     && git clone https://github.com/citusdata/pg_cron.git \
+    #     && cd pg_cron \
+    #     && make \
+    #     && make install \
+    #     && rm -rf /tmp/pg_cron
+
+    # Example: pgaudit - Audit logging
+    # RUN apt-get update && apt-get install -y postgresql-18-pgaudit
+
+    # Example: PostGIS - Geospatial
+    # RUN apt-get update && apt-get install -y postgresql-18-postgis-3
+
+    # -------------------------------------------------------------------------
+    # Cleanup: remove build tools and temp files
+    # -------------------------------------------------------------------------
+    && apt-get purge -y --auto-remove \
+        build-essential \
+        git \
+        postgresql-server-dev-18 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*

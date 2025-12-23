@@ -1,0 +1,5 @@
+# Environment
+.env
+
+# Docker data volumes (persisted locally)
+data/
