@@ -28,7 +28,7 @@ RUN apt-get update \
     && cd /tmp \
     && git clone --depth 1 --branch v0.8.1 https://github.com/pgvector/pgvector.git \
     && cd pgvector \
-    && make \
+    && make OPTFLAGS="" \
     && make install \
 
     # =============================================================================

@@ -37,4 +37,6 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- Note: You can also create databases manually after startup:
 --   docker exec -it dev_postgres psql -U postgres -c "CREATE DATABASE mydb;"
 --   docker exec -it dev_postgres psql -U postgres -d mydb -c "CREATE EXTENSION vector;"
+-- Check if extension is installed:
+--   docker exec dev_postgres psql -U postgres -d mydb -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
 -- -----------------------------------------------------------------------------
