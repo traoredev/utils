@@ -7,7 +7,8 @@
 
 -- Enable pgvector extension on default database
 CREATE EXTENSION IF NOT EXISTS vector;
-
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;
 -- -----------------------------------------------------------------------------
 -- Example: Create additional databases for your projects
 -- Uncomment and modify as needed
