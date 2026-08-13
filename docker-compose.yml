@@ -4,7 +4,7 @@
 # Usage:
 #   docker compose up -d                    # Start core services (postgres, redis, mail)
 #   docker compose --profile admin up -d    # Include pgAdmin & RedisInsight
-#   docker compose --profile s3 up -d       # Include MinIO
+#   docker compose --profile s3 up -d       # Include RustFS (S3-compatible storage)
 #   docker compose --profile full up -d     # Start everything
 #   docker compose --profile test up -d     # Start test database
 # =============================================================================
@@ -118,26 +118,41 @@ services:
       - full
 
   # ---------------------------------------------------------------------------
-  # MinIO - S3-compatible Object Storage
+  # RustFS - S3-compatible Object Storage
+  # One shared instance for all local projects; one bucket per project.
   # ---------------------------------------------------------------------------
-  minio:
-    image: minio/minio:latest
-    container_name: dev_minio
-    command: server /data --console-address ":9001"
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: dev_rustfs
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+      RUSTFS_ADDRESS: '0.0.0.0:9000'
+      RUSTFS_CONSOLE_ADDRESS: '0.0.0.0:9001'
+      RUSTFS_CONSOLE_ENABLE: 'true'
     ports:
-      - '${MINIO_API_PORT:-9000}:9000'
-      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+      # Dev infrastructure: bound to loopback so it is not exposed on the LAN
+      - '127.0.0.1:${RUSTFS_API_PORT:-9000}:9000'
+      - '127.0.0.1:${RUSTFS_CONSOLE_PORT:-9001}:9001'
     volumes:
-      - ./data/minio:/data
+      # Image default is RUSTFS_VOLUMES=/data (single drive, fine for dev)
+      - ./data/rustfs:/data
+    # The image runs as uid 10001, which cannot write a root-owned bind mount.
+    # Running as root keeps ./data/rustfs usable without a permission-fixer
+    # sidecar; this is local development infrastructure only.
+    user: '0:0'
     restart: unless-stopped
     healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
-      interval: 5s
+      # S3 API health + console health (RustFS's unauthenticated probes)
+      test:
+        [
+          'CMD-SHELL',
+          'curl -fsS http://127.0.0.1:9000/health && curl -fsS http://127.0.0.1:9001/rustfs/console/health',
+        ]
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
     networks:
       - dev-network
     profiles:
@@ -145,21 +160,41 @@ services:
       - full
 
   # ---------------------------------------------------------------------------
-  # MinIO Init - Create default buckets
+  # RustFS Init - Create the buckets listed in S3_BUCKETS (space separated)
+  # Idempotent: existing buckets are left untouched. Uses the AWS CLI, so no
+  # storage-vendor-specific tooling is required.
   # ---------------------------------------------------------------------------
-  minio-init:
-    image: minio/mc:latest
-    container_name: dev_minio_init
+  rustfs-init:
+    image: amazon/aws-cli:latest
+    container_name: dev_rustfs_init
     depends_on:
-      minio:
+      rustfs:
         condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin};
-      mc mb local/dev --ignore-existing;
-      mc anonymous set download local/dev;
-      echo 'Default bucket created';
-      "
+    environment:
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+      AWS_DEFAULT_REGION: ${S3_REGION:-us-east-1}
+      AWS_EC2_METADATA_DISABLED: 'true'
+      S3_ENDPOINT: http://rustfs:9000
+      S3_BUCKETS: ${S3_BUCKETS:-dev}
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        set -eu
+        for bucket in $${S3_BUCKETS}; do
+          if aws --endpoint-url "$${S3_ENDPOINT}" s3api head-bucket --bucket "$${bucket}" >/dev/null 2>&1; then
+            echo "bucket already exists: $${bucket}"
+          elif [ "$${AWS_DEFAULT_REGION}" = "us-east-1" ]; then
+            aws --endpoint-url "$${S3_ENDPOINT}" s3api create-bucket --bucket "$${bucket}" >/dev/null
+            echo "bucket created: $${bucket}"
+          else
+            aws --endpoint-url "$${S3_ENDPOINT}" s3api create-bucket --bucket "$${bucket}" \
+              --create-bucket-configuration "LocationConstraint=$${AWS_DEFAULT_REGION}" >/dev/null
+            echo "bucket created: $${bucket}"
+          fi
+        done
+        echo "bucket initialization complete"
+    restart: 'no'
     networks:
       - dev-network
     profiles:

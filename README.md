@@ -11,7 +11,7 @@ A unified Docker Compose setup for local development with Elixir and Node.js pro
 | **Mailpit**       | 8025 (UI) / 1025 (SMTP) | Email testing                           |
 | **pgAdmin**       | 5050                    | PostgreSQL management (profile: admin)  |
 | **RedisInsight**  | 5540                    | Redis management (profile: admin)       |
-| **MinIO**         | 9001 (UI) / 9000 (API)  | S3-compatible storage (profile: s3)     |
+| **RustFS**        | 9001 (UI) / 9000 (API)  | S3-compatible storage (profile: s3)     |
 
 ## Quick Start
 
@@ -26,7 +26,7 @@ docker compose up -d
 # Start with admin UIs (pgAdmin, RedisInsight)
 docker compose --profile admin up -d
 
-# Start with S3 storage
+# Start with S3 storage (RustFS + bucket initialization)
 docker compose --profile s3 up -d
 
 # Start everything
@@ -80,25 +80,75 @@ REDIS_PORT=6379
 DATABASE_URI=postgresql://postgres:postgres@localhost:5433/payload_cms
 ```
 
-## Creating S3 Buckets (MinIO)
+## S3 Object Storage (RustFS)
 
-A default `dev` bucket is created automatically. To add more:
+A single shared RustFS instance serves every local project. Projects do **not**
+run their own object-storage container - each one gets its own bucket:
+
+```
+One RustFS instance
+├── project-a-dev
+├── project-b-dev
+├── insurance-dev
+└── other-project-dev
+```
+
+| Endpoint       | URL                   |
+| -------------- | --------------------- |
+| S3 API         | http://localhost:9000 |
+| RustFS Console | http://localhost:9001 |
+
+Default local credentials are `rustfsadmin` / `rustfsadmin` (see `.env.example`).
+
+### Creating buckets
+
+Declare bucket names centrally in `.env` via `S3_BUCKETS` (space separated).
+The `rustfs-init` service creates any that are missing on every startup, and is
+idempotent - existing buckets and their contents are left alone.
+
+```env
+S3_BUCKETS=project-a-dev project-b-dev insurance-dev
+```
 
 ```bash
-# Create a new bucket
-docker exec dev_minio mc mb local/my-bucket
-
-# Or use the MinIO Console at http://localhost:9001
+# Apply after editing .env
+docker compose --profile s3 up -d rustfs-init
 ```
+
+Buckets are private by default. You can also create one ad hoc with any S3
+client, or through the RustFS Console at http://localhost:9001.
+
+```bash
+aws --endpoint-url http://localhost:9000 s3 mb s3://my-bucket
+```
+
+### Connecting from your projects
+
+Configure a standard S3 client - nothing in your application needs to know it
+is talking to RustFS:
+
+```env
+S3_ENDPOINT=http://localhost:9000
+S3_REGION=us-east-1
+S3_ACCESS_KEY=rustfsadmin
+S3_SECRET_KEY=rustfsadmin
+S3_BUCKET=project-a-dev
+S3_FORCE_PATH_STYLE=true
+```
+
+Because these are provider-neutral settings, the same storage abstraction runs
+against RustFS locally, AWS S3 in production, or Cloudflare R2 - only the
+endpoint, region, credentials and bucket change.
 
 ## Service URLs
 
-| Service       | URL                   |
-| ------------- | --------------------- |
-| Mailpit       | http://localhost:8025 |
-| pgAdmin       | http://localhost:5050 |
-| RedisInsight  | http://localhost:5540 |
-| MinIO Console | http://localhost:9001 |
+| Service        | URL                   |
+| -------------- | --------------------- |
+| Mailpit        | http://localhost:8025 |
+| pgAdmin        | http://localhost:5050 |
+| RedisInsight   | http://localhost:5540 |
+| RustFS Console | http://localhost:9001 |
+| S3 API         | http://localhost:9000 |
 
 ### Connecting pgAdmin to PostgreSQL
 
@@ -121,7 +171,7 @@ Data is persisted in `./data/` directory:
 - `data/redis/` - Redis data
 - `data/pgadmin/` - pgAdmin settings
 - `data/redis_insight/` - RedisInsight settings
-- `data/minio/` - MinIO objects
+- `data/rustfs/` - RustFS objects (all buckets)
 
 > **Note**: The `data/` directory is gitignored. To reset all data, simply delete it and restart containers.
 
